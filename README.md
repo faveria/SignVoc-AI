@@ -25,8 +25,8 @@ The high-quality TTS model requires `espeak-ng`.
 
 ### 2. Clone and Setup Environment
 ```bash
-git clone https://github.com/yourusername/signvoc-ai.git
-cd signvoc-ai
+git clone https://github.com/faveria/SignVoc-AI.git
+cd SignVoc-AI
 
 # Create Virtual Environment (Python 3.11)
 python -m venv venv
