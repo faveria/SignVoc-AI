@@ -20,7 +20,8 @@ from src.backbone import TFLiteModel, get_model
 from src.landmarks_extraction import mediapipe_detection, draw, extract_coordinates, load_json_file
 from src.config import CONFIG
 from src.utils import Preprocess
-from src.tts import TextToSpeech 
+from src.llm_client import LLMClient # Groq API
+from src.tts import TextToSpeech # Local VITS 
 
 class SignLanguageDetector:
     """
@@ -55,13 +56,25 @@ class SignLanguageDetector:
         # Prediction Frequency Control
         self.frame_counter = 0
         self.prediction_frequency = 5 # Predict every 5 frames
+        self.last_pred_sign = None # For consistency check
         
-        # Initialize TTS
+        # Initialize LLM Integration
         try:
-            self.tts = TextToSpeech(gpu=True)
+            self.llm = LLMClient()
+            # print("LLM Client initialized.")
         except Exception as e:
-            print(f"Warning: TTS failed to initialize. Audio will be disabled. Error: {e}")
+            print(f"[ERROR] LLM initialization failed: {e}")
+            self.llm = None
+
+        # Initialize Text-to-Speech Engine
+        try:
+            self.tts = TextToSpeech(gpu=False)
+        except Exception as e:
+            print(f"[ERROR] TTS initialization failed: {e}")
             self.tts = None
+            
+        # UI State
+        self.is_processing_api = False
             
         # Smart Pause / Sentence Building
         self.sentence_buffer: List[str] = []
@@ -103,8 +116,13 @@ class SignLanguageDetector:
         
         detected_sign = None
         
+        # Strict Hand Check: If no hands detected, skip prediction
+        # This prevents "background noise" when user is not signing
+        has_left_hand = results.left_hand_landmarks is not None
+        has_right_hand = results.right_hand_landmarks is not None
+        
         # Check if buffer is full (maxlen reached) AND it's time to predict
-        if len(self.sequence_data) == CONFIG.SEQ_LEN and (self.frame_counter % self.prediction_frequency == 0):
+        if (has_left_hand or has_right_hand) and len(self.sequence_data) == CONFIG.SEQ_LEN and (self.frame_counter % self.prediction_frequency == 0):
              # Prepare input batch [1, SEQ_LEN, 543*3]
              input_seq = np.array(list(self.sequence_data), dtype=np.float32)
              
@@ -114,11 +132,17 @@ class SignLanguageDetector:
 
              if max_prob > CONFIG.THRESH_HOLD:
                  sign_idx = int(np.argmax(prediction.numpy(), axis=-1)[0])
-                 detected_sign = self.decode_sign(sign_idx)
+                 current_sign = self.decode_sign(sign_idx)
                  
-                 # Optional: Reset sequence if a strong detection is found to avoid double counting?
-                 # No, in sliding window we usually keep going. But we might want simple debounce.
-                 # For now, let's keep it pure sliding window.
+                 # Consistency Check: Only accept if we detect the SAME sign 2 consecutive times
+                 # This allows us to use a lower threshold (0.4) to catch signs, 
+                 # while filtering out random noise (which rarely repeats consistently).
+                 if current_sign == self.last_pred_sign:
+                     detected_sign = current_sign
+                 
+                 self.last_pred_sign = current_sign
+             else:
+                 self.last_pred_sign = None
         
         return image, detected_sign
 
@@ -129,8 +153,8 @@ class WebcamStream:
         # optimize text
         self.stream.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
         # Lower resolution slightly for inference speed if needed (optional)
-        # self.stream.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        # self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.stream.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
+        self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
         
         (self.grabbed, self.frame) = self.stream.read()
         self.stopped = False
@@ -164,15 +188,15 @@ def main():
         print(f"Critical Error: {e}")
         return
 
-    # Use threaded camera
+    # Webcam Init
     cap = WebcamStream(0).start()
     
-    # Allow camera to warm up
+    # Allow camera sensor to warm up
     time.sleep(1.0)
     
-    # Dummy check (threaded stream doesn't have isOpened in same way, but read will return valid frame)
+    # Connection verification
     if not cap.grabbed:
-         print("Error: Could not open webcam.")
+         print("[ERROR] Could not gain access to webcam.")
          cap.stop()
          return
 
@@ -220,20 +244,34 @@ def main():
                      detector.last_detection_time = time.time()
                      print(f"Buffer: {detector.sentence_buffer}") # Debug
             
-            # --- Smart Pause Logic ---
-            # If buffer has words AND user hasn't signed for N seconds -> Speak
-            if detector.sentence_buffer and (time.time() - detector.last_detection_time > detector.pause_threshold):
-                full_sentence = " ".join(detector.sentence_buffer)
-                print(f"Speaking Sentence: {full_sentence}")
-                
-                if detector.tts:
-                    detector.tts.speak(full_sentence)
-                
-                # Add to history (detector.sentence) for display
-                detector.sentence.insert(0, full_sentence)
-                
-                # Clear buffer
-                detector.sentence_buffer = []
+            # --- Smart Pause / Groq Trigger Logic ---
+            # If buffer has words AND user hasn't signed for N seconds -> Process
+            current_time = time.time()
+            if (current_time - detector.last_detection_time) > detector.pause_threshold:
+                if detector.sentence_buffer and not detector.is_processing_api:
+                    
+                    detector.is_processing_api = True
+                    raw_sentence = " ".join(detector.sentence_buffer)
+                    # print(f"Processing sequence: {raw_sentence}")
+                    
+                    def process_request():
+                        # 1. Semantic Refinement (LLM)
+                        final_text = raw_sentence
+                        if detector.llm:
+                            final_text = detector.llm.process_text(detector.sentence_buffer)
+                        
+                        # Update UI with corrected text
+                        detector.sentence.insert(0, final_text)
+                        
+                        # 2. Speak (The Voice)
+                        if detector.tts:
+                            detector.tts.speak(final_text)
+                            
+                        # Cleanup
+                        detector.sentence_buffer.clear()
+                        detector.is_processing_api = False
+                        
+                    threading.Thread(target=process_request, daemon=True).start()
             
             # --- UI Rendering ---
             image = cv2.flip(image, 1) # Flip for selfie view

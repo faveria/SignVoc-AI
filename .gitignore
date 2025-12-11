@@ -163,3 +163,4 @@ cython_debug/
 
 # Local Artifacts/Trash
 sign-language/
+.env

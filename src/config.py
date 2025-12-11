@@ -1,6 +1,10 @@
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 @dataclass
 class ModelConfig:
@@ -13,7 +17,11 @@ class ModelConfig:
     THRESH_HOLD: float = 0.4
     
     # Espeak Path
+    # Espeak Path
     PHONEMIZER_ESPEAK_PATH: str = r"C:\Program Files\eSpeak NG\libespeak-ng.dll"
+    
+    # Cloud Config
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
     
     CHANNELS: int = field(init=False)
     NUM_NODES: int = field(init=False)
