@@ -1,72 +1,90 @@
-# SignVoc-AI: Real-Time Sign Language Recognition with Premium TTS
+# SignVoc-AI: Hybrid Edge-Cloud Sign Language Translation
 
-A high-performance Sign Language Recognition system that translates ASL capability into spoken English using **VITS (VCTK)**, a state-of-the-art Text-to-Speech model.
+SignVoc-AI is a high-performance **Hybrid Edge-Cloud** system that bridges the gap between Sign Language and spoken English. It leverages local efficiency for computer vision and the unlimited power of Cloud AI for semantic understanding.
 
-## Features
-- **Real-Time Recognition**: Uses MediaPipe Holistic and a custom TFLite model to detect 250+ signs.
-- **Natural TTS**: Integrated Coqui TTS (VITS VCTK) for human-like voice output.
-- **Smart Pause**: Intelligent sentence construction that waits for natural pauses before speaking.
-- **Optimized Performance**: Multi-threaded webcam capture and background audio processing for smooth UI (15-25+ FPS).
-- **GPU Acceleration**: Fully supports CUDA for accelerated TTS inference.
+## 🧠 System Architecture
 
-## Prerequisites
+This project utilizes a **Smart Local** architecture:
+
+1.  **Vision (Edge)**:  
+    Running locally on your machine, **MediaPipe Holistic** detects hand landmarks in real-time, and a custom **TFLite Model** recognizes glosses (words) with low latency.
+2.  **Intelligence (Cloud)**:  
+    Detected glosses are sent to **Groq Cloud** running **Llama-3.3-70b-versatile**. The LLM contextually refines raw glosses into grammatically correct English sentences (e.g., "ME HUNGRY" -> "I am hungry").
+3.  **Voice (Edge)**:  
+    The refined sentence is synthesized back into speech locally using **Coqui TTS (VITS VCTK)**, ensuring high-quality, natural-sounding audio without latency-heavy audio streaming.
+
+## ✨ Features
+
+- **Real-Time Recognition**: Detects 250+ distinct ASL signs using lightweight TFLite inference.
+- **Context-Aware Translation**: Uses Large Language Models (LLM) to fix grammar, pronouns, and sentence structure.
+- **Natural Speech Synthesis**: Human-like voice output running locally via VITS.
+- **Smart Pause**: Automatically detects when the user stops signing to finalize and speak the sentence.
+- **Privacy-First**: Video feeds never leave your device; only text glosses are sent to the cloud.
+
+## 📋 Prerequisites
+
 - **OS**: Windows 10/11
-- **Python**: 3.11 (Recommended)
-- **Hardware**: NVIDIA GPU (Optional but recommended for smoother TTS)
-- **System Dependency**: `espeak-ng` (Required for TTS)
+- **Python**: 3.10+
+- **System Audio**: `espeak-ng` (Required for TTS phonemization)
+- **API Key**: A valid [Groq Cloud](https://console.groq.com/) API Key (Free tier available).
 
-## Installation Guide
+## 🛠️ Installation
 
-### 1. Install System Dependency (Crucial!)
-The high-quality TTS model requires `espeak-ng`.
-1. Download the installer: [espeak-ng-X64.msi](https://github.com/espeak-ng/espeak-ng/releases/download/1.51/espeak-ng-X64.msi)
-2. Install it (Standard installation).
-3. **Restart your computer** or VS Code to ensure the system detects it.
+### 1. Install System Dependencies (Crucial)
+The TTS engine requires `espeak-ng` to work.
+1. Download installer: [espeak-ng-X64.msi](https://github.com/espeak-ng/espeak-ng/releases/download/1.51/espeak-ng-X64.msi)
+2. Install it.
+3. **Restart your computer** to ensure system paths are updated.
 
-### 2. Clone and Setup Environment
+### 2. Clone Repository
 ```bash
 git clone https://github.com/faveria/SignVoc-AI.git
 cd SignVoc-AI
+```
 
-# Create Virtual Environment (Python 3.11)
+### 3. Setup Python Environment
+```bash
+# Create Virtual Environment
 python -m venv venv
 
-# Activate Environment
+# Activate (Windows)
 .\venv\Scripts\activate
-```
 
-### 3. Install Python Dependencies
-```bash
+# Install Dependencies
 pip install -r requirements.txt
 ```
-*Note: If you have an NVIDIA GPU, ensure you have CUDA 11.8 installed for best performance.*
 
-## Usage
+### 4. Configure Secrets
+Create a `.env` file in the root directory and add your Groq API Key:
+```ini
+GROQ_API_KEY=gsk_your_actual_api_key_here
+```
+*(Note: Never commit your .env file to GitHub!)*
 
-Simply run the main script:
+## 🚀 Usage
+
+Run the main application:
 ```bash
 python main.py
 ```
 
-- **First Run**: The system will download the VITS model (~100MB). This happens only once.
-- **Operation**: 
-    1. Stand in front of the camera.
-    2. Perform signs.
-    3. The system captures words in a buffer (displayed on screen).
-    4. Stop signing for **3 seconds** to trigger the "Smart Pause".
-    5. The system will speak the sentence aloud.
-- **Controls**: Press `q` to exit.
+### Operational Guide:
+1.  **Sign**: Perform ASL signs in front of the camera.
+2.  **Monitor**: Recognized glosses (words) will appear in the buffer at the top of the screen.
+3.  **Pause**: Stop signing for **3 seconds**.
+4.  **Listen**: The system will automatically translate the glosses and speak the sentence.
 
-## Project Structure
-- `src/backbone.py`: Custom Keras/TFLite model definitions.
-- `src/landmarks_extraction.py`: MediaPipe logic for converting frames to landmark vectors.
-- `src/tts.py`: Audio engine handling VITS model and background playback.
-- `src/config.py`: Configuration for model hyperparameters and paths.
-- `main.py`: Main application loop integrating UI, Detection, and TTS.
+**Controls**:
+- Press `q` to exit safely.
 
-## Troubleshooting
-- **No Sound?**: Ensure `espeak-ng` is installed. The application tries to auto-detect it in `C:\Program Files\eSpeak NG`.
-- **Low FPS?**: Ensure your GPU is being used. Only `face_landmarks` are disabled by default to boost performance.
+## 📂 Project Structure
 
-## Credits
-Powered by [MediaPipe](https://google.github.io/mediapipe/), [Coqui TTS](https://github.com/coqui-ai/TTS), and TensorFlow.
+- `main.py`: The central orchestrator managing the vision loop, thread management, and logic flow.
+- `src/backbone.py`: Definition of the Keras/TFLite model architecture.
+- `src/llm_client.py`: Interface for communicating with Groq API (Llama-3).
+- `src/tts.py`: Local audio engine wrapper for Coqui TTS (VITS).
+- `src/landmarks_extraction.py`: Optimized MediaPipe logic for landmark processing.
+- `src/config.py`: Centralized configuration management.
+
+## 🤝 Credits
+Powered by **MediaPipe**, **TensorFlow**, **Groq Cloud**, and **Coqui TTS**.
