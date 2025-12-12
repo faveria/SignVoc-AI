@@ -1,13 +1,3 @@
-"""
-Real-time ASL (American Sign Language) Recognition
-
-This script uses a pre-trained TFLite model to perform real-time ASL recognition using webcam feed.
-It utilizes the MediaPipe library for hand tracking and landmark extraction.
-
-Author: 209sontung
-Date: May 2023 [Refactored Dec 2025]
-"""
-
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -20,8 +10,8 @@ from src.backbone import TFLiteModel, get_model
 from src.landmarks_extraction import mediapipe_detection, draw, extract_coordinates, load_json_file
 from src.config import CONFIG
 from src.utils import Preprocess
-from src.llm_client import LLMClient # Groq API
-from src.tts import TextToSpeech # Local VITS 
+from src.llm_client import LLMClient 
+from src.tts import TextToSpeech
 
 class SignLanguageDetector:
     """
@@ -51,7 +41,6 @@ class SignLanguageDetector:
         
         # Mediapipe Holistic
         self.mp_holistic = mp.solutions.holistic
-        
         
         # Prediction Frequency Control
         self.frame_counter = 0
